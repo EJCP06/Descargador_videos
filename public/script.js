@@ -14,19 +14,19 @@ const html = document.documentElement;
 const savedTheme = localStorage.getItem('theme') || 'dark';
 if (savedTheme === 'light') {
     html.classList.remove('dark');
-    sunIcon.classList.remove('hidden');
-    moonIcon.classList.add('hidden');
-} else {
     sunIcon.classList.add('hidden');
     moonIcon.classList.remove('hidden');
+} else {
+    sunIcon.classList.remove('hidden');
+    moonIcon.classList.add('hidden');
 }
 
 themeToggle.addEventListener('click', () => {
     html.classList.toggle('dark');
     const isDark = html.classList.contains('dark');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    sunIcon.classList.toggle('hidden', isDark);
-    moonIcon.classList.toggle('hidden', !isDark);
+    sunIcon.classList.toggle('hidden', !isDark);
+    moonIcon.classList.toggle('hidden', isDark);
 });
 
 // Elementos del DOM
@@ -82,6 +82,16 @@ document.querySelectorAll('.tab').forEach(tab => {
 // Event Listener para descarga
 downloadBtn.addEventListener('click', downloadVideo);
 
+// Reset search when input is cleared
+urlInput.addEventListener('input', () => {
+    if (urlInput.value.trim() === '') {
+        resultsSection.classList.add('hidden');
+        resultsSection.classList.remove('fade-in');
+        currentVideoInfo = null;
+        selectedFormat = null;
+    }
+});
+
 // Buscar video
 async function searchVideo() {
     const url = urlInput.value.trim();
@@ -110,6 +120,8 @@ async function searchVideo() {
             currentVideoInfo = data;
             displayVideoInfo(data);
             resultsSection.classList.remove('hidden');
+            resultsSection.classList.remove('fade-in');
+            void resultsSection.offsetWidth;
             resultsSection.classList.add('fade-in');
             
             // Scroll suave a resultados
@@ -222,7 +234,9 @@ async function downloadVideo() {
         return;
     }
 
-    const url = currentVideoInfo.webpage_url;
+    // Guardar info del video para esta descarga específica
+    const videoData = { ...currentVideoInfo };
+    const url = videoData.webpage_url;
     const activeTab = document.querySelector('.tab.active').dataset.tab;
     
     let formatArg = '';
@@ -239,8 +253,8 @@ async function downloadVideo() {
         formatArg = selectedVideo ? selectedVideo.value : 'bestvideo[height<=1080]+bestaudio/best';
     }
 
-    const fileName = `${currentVideoInfo.title || 'video'}.${fileExt}`;
-    const downloadUrl = `${API_BASE}/api/download?url=${encodeURIComponent(url)}&format=${type}&quality=${encodeURIComponent(formatArg)}&title=${encodeURIComponent(currentVideoInfo.title || 'video')}`;
+    const fileName = `${videoData.title || 'video'}.${fileExt}`;
+    const downloadUrl = `${API_BASE}/api/download?url=${encodeURIComponent(url)}&format=${type}&quality=${encodeURIComponent(formatArg)}&title=${encodeURIComponent(videoData.title || 'video')}`;
     const tipoLabel = type === 'audio' ? 'audio' : 'video';
 
     // Abrir dialogo nativo ANTES de cualquier async (requerido por la API)
@@ -256,20 +270,29 @@ async function downloadVideo() {
                             [type === 'audio' ? 'audio/mpeg' : 'video/mp4']: [`.${fileExt}`]
                         }
                     }
-                ]
+                ],
+                excludeAcceptAllOption: false
             });
         } catch (e) {
             if (e.name === 'AbortError') {
                 showStatus('Descarga cancelada.', 'error');
                 return;
             }
+            console.log('showSaveFilePicker no soportado, usando descarga normal');
         }
     }
 
-    setLoading(downloadBtn, true);
-
-    // Crear toast de descarga con ID para poder actualizarlo
-    const toastId = 'download-toast';
+    // Crear toast de descarga con ID único para cada descarga
+    const toastId = 'download-toast-' + Date.now();
+    
+    // Guardar estado de descarga para reanudar si se recarga
+    saveDownloadState({
+        id: toastId,
+        url: downloadUrl,
+        fileName: fileName,
+        title: videoData.title || 'Video'
+    });
+    
     if (window.gtoast) {
         window.gtoast.show({
             id: toastId,
@@ -352,17 +375,29 @@ async function downloadVideo() {
             await writable.write(blob);
             await writable.close();
             // Actualizar toast a success
-                if (window.gtoast) {
-                    window.gtoast.show({
-                        id: toastId,
-                        title: 'Descarga completada',
-                        description: 'Archivo guardado como "' + fileName + '"',
-                        state: 'success',
-                        duration: 4000,
-                        fill: getToastFill()
-                    });
-                }
-            addToHistory(currentVideoInfo.title, type === 'audio' ? 'MP3' : 'MP4');
+            if (window.gtoast) {
+                const successDesc = document.createElement('div');
+                successDesc.style.cssText = 'display:flex;align-items:center;gap:10px;';
+                const sImg = document.createElement('img');
+                sImg.src = videoData.thumbnail || '';
+                sImg.style.cssText = 'width:80px;height:50px;object-fit:cover;border-radius:6px;flex-shrink:0;';
+                sImg.onerror = function() { this.style.display='none'; };
+                const sText = document.createElement('div');
+                sText.style.cssText = 'overflow:hidden;';
+                sText.innerHTML = '<strong style="font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (videoData.title || '') + '</strong><span style="font-size:11px;opacity:0.7;">Archivo guardado correctamente</span>';
+                successDesc.appendChild(sImg);
+                successDesc.appendChild(sText);
+                window.gtoast.show({
+                    id: toastId,
+                    title: 'Descarga completada',
+                    description: successDesc,
+                    state: 'success',
+                    duration: 4000,
+                    fill: getToastFill()
+                });
+            }
+            removeDownloadState(toastId);
+            addToHistory(videoData.title, type === 'audio' ? 'MP3' : 'MP4');
         } else {
             // Fallback: enlace normal
             const blobUrl = URL.createObjectURL(blob);
@@ -377,34 +412,55 @@ async function downloadVideo() {
             }, 100);
             // Actualizar toast a success
             if (window.gtoast) {
+                const successDesc = document.createElement('div');
+                successDesc.style.cssText = 'display:flex;align-items:center;gap:10px;';
+                const sImg = document.createElement('img');
+                sImg.src = videoData.thumbnail || '';
+                sImg.style.cssText = 'width:80px;height:50px;object-fit:cover;border-radius:6px;flex-shrink:0;';
+                sImg.onerror = function() { this.style.display='none'; };
+                const sText = document.createElement('div');
+                sText.style.cssText = 'overflow:hidden;';
+                sText.innerHTML = '<strong style="font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (videoData.title || '') + '</strong><span style="font-size:11px;opacity:0.7;">Revisa tu carpeta de descargas</span>';
+                successDesc.appendChild(sImg);
+                successDesc.appendChild(sText);
                 window.gtoast.show({
                     id: toastId,
                     title: 'Descarga completada',
-                    description: 'Revisa tu carpeta de descargas.',
+                    description: successDesc,
                     state: 'success',
                     duration: 4000,
                     fill: getToastFill()
                 });
             }
-            addToHistory(currentVideoInfo.title, type === 'audio' ? 'MP3' : 'MP4');
+            removeDownloadState(toastId);
+            addToHistory(videoData.title, type === 'audio' ? 'MP3' : 'MP4');
         }
 
     } catch (error) {
         console.error('Error:', error);
         clearInterval(progressInterval);
-        // Actualizar toast a error
+        removeDownloadState(toastId);
         if (window.gtoast) {
+            const errorDesc = document.createElement('div');
+            errorDesc.style.cssText = 'display:flex;align-items:center;gap:10px;';
+            const eImg = document.createElement('img');
+            eImg.src = videoData.thumbnail || '';
+            eImg.style.cssText = 'width:80px;height:50px;object-fit:cover;border-radius:6px;flex-shrink:0;';
+            eImg.onerror = function() { this.style.display='none'; };
+            const eText = document.createElement('div');
+            eText.style.cssText = 'overflow:hidden;';
+            eText.innerHTML = '<strong style="font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (videoData.title || '') + '</strong><span style="font-size:11px;opacity:0.7;">Intenta de nuevo</span>';
+            errorDesc.appendChild(eImg);
+            errorDesc.appendChild(eText);
             window.gtoast.show({
                 id: toastId,
                 title: 'Error en la descarga',
-                description: 'Intenta de nuevo.',
+                description: errorDesc,
                 state: 'error',
                 duration: 4000,
                 fill: getToastFill()
             });
         }
-    } finally {
-        setLoading(downloadBtn, false);
     }
 }
 
@@ -466,6 +522,14 @@ function formatNumber(num) {
     return num.toString();
 }
 
+function resetSearch() {
+    urlInput.value = '';
+    resultsSection.classList.add('hidden');
+    resultsSection.classList.remove('fade-in');
+    currentVideoInfo = null;
+    selectedFormat = null;
+}
+
 function setLoading(btn, loading) {
     const textEl = btn.querySelector('.btn-text');
     const loaderEl = btn.querySelector('.btn-loader');
@@ -506,4 +570,124 @@ document.addEventListener('DOMContentLoaded', () => {
         firstTab.classList.remove('bg-gray-100', 'dark:bg-dark-800/50', 'text-gray-500', 'dark:text-dark-400');
         firstTab.classList.add('bg-white', 'dark:bg-dark-700', 'text-gray-900', 'dark:text-white', 'shadow-sm');
     }
+
+    // Restaurar posición de scroll
+    const savedScroll = sessionStorage.getItem('scrollPos');
+    if (savedScroll) {
+        setTimeout(() => window.scrollTo(0, parseInt(savedScroll)), 100);
+    }
+
+    // Guardar posición de scroll al recargar
+    window.addEventListener('beforeunload', () => {
+        sessionStorage.setItem('scrollPos', window.scrollY);
+    });
+
+    // Reanudar descargas pendientes después de recargar
+    resumeDownloads();
 });
+
+// Guardar y reanudar descargas
+function saveDownloadState(downloadData) {
+    let downloads = JSON.parse(sessionStorage.getItem('pendingDownloads') || '[]');
+    downloads.push(downloadData);
+    sessionStorage.setItem('pendingDownloads', JSON.stringify(downloads));
+}
+
+function removeDownloadState(downloadId) {
+    let downloads = JSON.parse(sessionStorage.getItem('pendingDownloads') || '[]');
+    downloads = downloads.filter(d => d.id !== downloadId);
+    sessionStorage.setItem('pendingDownloads', JSON.stringify(downloads));
+}
+
+function resumeDownloads() {
+    const downloads = JSON.parse(sessionStorage.getItem('pendingDownloads') || '[]');
+    if (downloads.length === 0) return;
+
+    downloads.forEach(dl => {
+        const toastId = 'download-toast-' + dl.id;
+        if (window.gtoast) {
+            window.gtoast.show({
+                id: toastId,
+                title: 'Reanudando descarga...',
+                state: 'loading',
+                duration: null,
+                autopilot: false,
+                fill: getToastFill()
+            });
+        }
+
+        const downloadUrl = dl.url;
+
+        fetch(downloadUrl).then(response => {
+            if (!response.ok) throw new Error('Error');
+            const contentLength = response.headers.get('Content-Length');
+            const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
+            const reader = response.body.getReader();
+            const chunks = [];
+            let receivedBytes = 0;
+
+            const updateToast = (pct) => {
+                if (window.gtoast) {
+                    window.gtoast.show({
+                        id: toastId,
+                        title: 'Descargando... ' + pct + '%',
+                        state: 'loading',
+                        duration: null,
+                        autopilot: false,
+                        fill: getToastFill()
+                    });
+                }
+            };
+
+            const processStream = () => {
+                return reader.read().then(({ done, value }) => {
+                    if (done) {
+                        const blob = new Blob(chunks);
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        a.download = dl.fileName;
+                        document.body.appendChild(a);
+                        a.click();
+                        setTimeout(() => {
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(a.href);
+                        }, 100);
+
+                        removeDownloadState(dl.id);
+
+                        if (window.gtoast) {
+                            window.gtoast.show({
+                                id: toastId,
+                                title: 'Descarga completada',
+                                description: dl.title,
+                                state: 'success',
+                                duration: 4000,
+                                fill: getToastFill()
+                            });
+                        }
+                        return;
+                    }
+                    chunks.push(value);
+                    receivedBytes += value.length;
+                    if (totalBytes > 0) {
+                        updateToast(Math.min(Math.round((receivedBytes / totalBytes) * 100), 99));
+                    }
+                    return processStream();
+                });
+            };
+
+            return processStream();
+        }).catch(() => {
+            removeDownloadState(dl.id);
+            if (window.gtoast) {
+                window.gtoast.show({
+                    id: toastId,
+                    title: 'Error al reanudar descarga',
+                    state: 'error',
+                    duration: 4000,
+                    fill: getToastFill()
+                });
+            }
+        });
+    });
+}

@@ -183,6 +183,7 @@ router.get('/files/:filename', (req, res) => {
 function sanitizeFilename(name) {
     return name
         .replace(/[<>:"/\\|?*]/g, '')
+        .replace(/[^\x00-\x7F]/g, '')
         .replace(/\s+/g, ' ')
         .trim()
         .substring(0, 100);
