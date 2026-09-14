@@ -1,7 +1,7 @@
 const API_BASE = '';
 
 function getToastFill() {
-    return document.documentElement.classList.contains('dark') ? '#FFFFFF' : '#000000';
+    return '#FFFFFF';
 }
 
 // Theme Toggle
