@@ -70,6 +70,11 @@ html {
     border-color: rgba(239, 68, 68, 0.5);
 }
 
+.format-item:has(input:checked):hover {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.15);
+}
+
 /* Custom radio button - hide default */
 .format-item input[type="radio"] {
     -webkit-appearance: none;
