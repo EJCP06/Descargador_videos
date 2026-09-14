@@ -179,7 +179,7 @@ function createFormatItem(format, type, isSelected = false) {
         <div class="flex items-center gap-3">
             <input type="radio" name="${radioName}" id="${radioId}" 
                    value="${format.formatId}" ${isSelected ? 'checked' : ''}
-                   class="w-5 h-5 text-primary-500 bg-gray-200 dark:bg-dark-700 border-gray-300 dark:border-dark-600 focus:ring-primary-500 focus:ring-offset-white dark:focus:ring-offset-dark-900">
+                   class="focus:ring-primary-500 focus:ring-offset-white dark:focus:ring-offset-dark-900">
             <div>
                 <span class="font-medium text-gray-900 dark:text-white">${format.quality}</span>
                 <span class="text-gray-500 dark:text-dark-400 text-sm ml-2">.${format.ext}</span>

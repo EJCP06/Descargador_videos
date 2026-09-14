@@ -70,6 +70,46 @@ html {
     border-color: rgba(239, 68, 68, 0.5);
 }
 
+/* Custom radio button - hide default */
+.format-item input[type="radio"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #4b5563;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.dark .format-item input[type="radio"] {
+    border-color: #64748b;
+}
+
+.format-item input[type="radio"]:checked {
+    border-color: #ef4444;
+    background: transparent;
+}
+
+.format-item input[type="radio"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ef4444;
+}
+
+.format-item input[type="radio"]:hover {
+    border-color: #ef4444;
+}
+
 /* Status messages */
 .status-message {
     padding: 1rem 1.25rem;
