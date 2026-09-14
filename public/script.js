@@ -1,7 +1,7 @@
 const API_BASE = '';
 
 function getToastFill() {
-    return document.documentElement.classList.contains('dark') ? '#1e293b' : '#000000';
+    return document.documentElement.classList.contains('dark') ? '#FFFFFF' : '#000000';
 }
 
 // Theme Toggle
@@ -16,14 +16,17 @@ if (savedTheme === 'light') {
     html.classList.remove('dark');
     sunIcon.classList.remove('hidden');
     moonIcon.classList.add('hidden');
+} else {
+    sunIcon.classList.add('hidden');
+    moonIcon.classList.remove('hidden');
 }
 
 themeToggle.addEventListener('click', () => {
     html.classList.toggle('dark');
     const isDark = html.classList.contains('dark');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    sunIcon.classList.toggle('hidden', !isDark);
-    moonIcon.classList.toggle('hidden', isDark);
+    sunIcon.classList.toggle('hidden', isDark);
+    moonIcon.classList.toggle('hidden', !isDark);
 });
 
 // Elementos del DOM
